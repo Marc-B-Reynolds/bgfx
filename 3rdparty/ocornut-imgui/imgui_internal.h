@@ -546,6 +546,7 @@ struct IMGUI_API ImGuiDrawContext
     int                     StackSizesBackup[6];    // Store size of various stacks for asserting
 
     float                   IndentX;                // Indentation / start position from left of window (increased by TreePush/TreePop, etc.)
+    float                   GroupOffsetX;
     float                   ColumnsOffsetX;         // Offset to the current column (if ColumnsCurrent > 0). FIXME: This and the above should be a stack to allow use cases like Tree->Column->Tree. Need revamp columns API.
     int                     ColumnsCurrent;
     int                     ColumnsCount;
@@ -657,6 +658,7 @@ public:
 
     ImGuiID     GetID(const char* str, const char* str_end = NULL);
     ImGuiID     GetID(const void* ptr);
+    ImGuiID     GetIDNoKeepAlive(const char* str, const char* str_end = NULL);
 
     ImRect      Rect() const                            { return ImRect(Pos.x, Pos.y, Pos.x+Size.x, Pos.y+Size.y); }
     float       CalcFontSize() const                    { return GImGui->FontBaseSize * FontWindowScale; }

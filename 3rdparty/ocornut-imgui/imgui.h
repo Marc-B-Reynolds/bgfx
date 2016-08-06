@@ -62,11 +62,11 @@ struct ImGuiSizeConstraintCallbackData;// Structure used to constraint window si
 struct ImGuiListClipper;            // Helper to manually clip large list of items
 struct ImGuiContext;                // ImGui context (opaque)
 
-// Enumerations (declared as int for compatibility and to not pollute the top of this file)
-typedef unsigned int ImU32;
+// Typedefs and Enumerations (declared as int for compatibility and to not pollute the top of this file)
+typedef unsigned int ImU32;         // 32-bit unsigned integer (typically used to store packed colors)
+typedef unsigned int ImGuiID;       // unique ID used by widgets (typically hashed from a stack of string)
 typedef unsigned short ImWchar;     // character for keyboard input/display
 typedef void* ImTextureID;          // user data to identify a texture (this is whatever to you want it to be! read the FAQ about ImTextureID in imgui.cpp)
-typedef ImU32 ImGuiID;              // unique ID used by widgets (typically hashed from a stack of string)
 typedef int ImGuiCol;               // a color identifier for styling       // enum ImGuiCol_
 typedef int ImGuiStyleVar;          // a variable identifier for styling    // enum ImGuiStyleVar_
 typedef int ImGuiKey;               // a key identifier (ImGui-side enum)   // enum ImGuiKey_
@@ -758,10 +758,7 @@ struct ImGuiIO
     ImVec2        DisplayVisibleMax;        // <unset> (0.0f,0.0f)  // If the values are the same, we defaults to Min=(0.0f) and Max=DisplaySize
 
     // Advanced/subtle behaviors
-    bool          WordMovementUsesAltKey;   // = defined(__APPLE__) // OS X style: Text editing cursor movement using Alt instead of Ctrl
-    bool          ShortcutsUseSuperKey;     // = defined(__APPLE__) // OS X style: Shortcuts using Cmd/Super instead of Ctrl
-    bool          DoubleClickSelectsWord;   // = defined(__APPLE__) // OS X style: Double click selects by word instead of selecting whole text
-    bool          MultiSelectUsesSuperKey;  // = defined(__APPLE__) // OS X style: Multi-selection in lists uses Cmd/Super instead of Ctrl [unused yet]
+    bool          OSXBehaviors;             // = defined(__APPLE__) // OS X style: Text editing cursor movement using Alt instead of Ctrl, Shortcuts using Cmd/Super instead of Ctrl, Line/Text Start and End using Cmd+Arrows instead of Home/End, Double click selects by word instead of selecting whole text, Multi-selection in lists uses Cmd/Super instead of Ctrl
 
     //------------------------------------------------------------------
     // User Functions
@@ -888,7 +885,8 @@ public:
         if (new_capacity <= Capacity) return;
         T* new_data = (value_type*)ImGui::MemAlloc((size_t)new_capacity * sizeof(value_type));
         memset(&new_data[Size], 0, (size_t)(new_capacity - Size) * sizeof(value_type)); // BK - clear garbage so that 0 initialized ImString works properly.
-        memcpy(new_data, Data, (size_t)Size * sizeof(value_type));
+        if (Data)
+            memcpy(new_data, Data, (size_t)Size * sizeof(value_type));
         ImGui::MemFree(Data);
         Data = new_data;
         Capacity = new_capacity;
@@ -1325,6 +1323,7 @@ struct ImFontAtlas
     IMGUI_API const ImWchar*    GetGlyphRangesJapanese();   // Default + Hiragana, Katakana, Half-Width, Selection of 1946 Ideographs
     IMGUI_API const ImWchar*    GetGlyphRangesChinese();    // Japanese + full set of about 21000 CJK Unified Ideographs
     IMGUI_API const ImWchar*    GetGlyphRangesCyrillic();   // Default + about 400 Cyrillic characters
+    IMGUI_API const ImWchar*    GetGlyphRangesThai();       // Default + Thai characters
 
     // Members
     // (Access texture data via GetTexData*() calls which will setup a default font for you.)
