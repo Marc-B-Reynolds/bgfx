@@ -1113,6 +1113,7 @@ namespace bgfx { namespace d3d9
 		{
 			BX_FREE(g_allocator, m_uniforms[_handle.idx]);
 			m_uniforms[_handle.idx] = NULL;
+			m_uniformReg.remove(_handle);
 		}
 
 		void saveScreenShot(const char* _filePath) BX_OVERRIDE
@@ -2426,7 +2427,7 @@ namespace bgfx { namespace d3d9
 				else if (0 == (BGFX_UNIFORM_SAMPLERBIT & type) )
 				{
 					const UniformInfo* info = s_renderD3D9->m_uniformReg.find(name);
-					BX_CHECK(NULL != info, "User defined uniform '%s' is not found, it won't be set.", name);
+					BX_WARN(NULL != info, "User defined uniform '%s' is not found, it won't be set.", name);
 
 					if (NULL != info)
 					{
@@ -4020,22 +4021,22 @@ namespace bgfx { namespace d3d9
 				}
 
 				if (programChanged
-				||  currentState.m_vertexBuffer.idx != draw.m_vertexBuffer.idx
+				||  currentState.m_stream[0].m_handle.idx != draw.m_stream[0].m_handle.idx
 				||  currentState.m_instanceDataBuffer.idx != draw.m_instanceDataBuffer.idx
-				||  currentState.m_instanceDataOffset != draw.m_instanceDataOffset
-				||  currentState.m_instanceDataStride != draw.m_instanceDataStride)
+				||  currentState.m_instanceDataOffset     != draw.m_instanceDataOffset
+				||  currentState.m_instanceDataStride     != draw.m_instanceDataStride)
 				{
-					currentState.m_vertexBuffer = draw.m_vertexBuffer;
+					currentState.m_stream[0].m_handle     = draw.m_stream[0].m_handle;
 					currentState.m_instanceDataBuffer.idx = draw.m_instanceDataBuffer.idx;
-					currentState.m_instanceDataOffset = draw.m_instanceDataOffset;
-					currentState.m_instanceDataStride = draw.m_instanceDataStride;
+					currentState.m_instanceDataOffset     = draw.m_instanceDataOffset;
+					currentState.m_instanceDataStride     = draw.m_instanceDataStride;
 
-					uint16_t handle = draw.m_vertexBuffer.idx;
+					uint16_t handle = draw.m_stream[0].m_handle.idx;
 					if (invalidHandle != handle)
 					{
 						const VertexBufferD3D9& vb = m_vertexBuffers[handle];
 
-						uint16_t decl = !isValid(vb.m_decl) ? draw.m_vertexDecl.idx : vb.m_decl.idx;
+						uint16_t decl = !isValid(vb.m_decl) ? draw.m_stream[0].m_decl.idx : vb.m_decl.idx;
 						const VertexDeclD3D9& vertexDecl = m_vertexDecls[decl];
 						DX_CHECK(device->SetStreamSource(0, vb.m_ptr, 0, vertexDecl.m_decl.m_stride) );
 
@@ -4081,13 +4082,13 @@ namespace bgfx { namespace d3d9
 					}
 				}
 
-				if (isValid(currentState.m_vertexBuffer) )
+				if (isValid(currentState.m_stream[0].m_handle) )
 				{
 					uint32_t numVertices = draw.m_numVertices;
 					if (UINT32_MAX == numVertices)
 					{
-						const VertexBufferD3D9& vb = m_vertexBuffers[currentState.m_vertexBuffer.idx];
-						uint16_t decl = !isValid(vb.m_decl) ? draw.m_vertexDecl.idx : vb.m_decl.idx;
+						const VertexBufferD3D9& vb = m_vertexBuffers[currentState.m_stream[0].m_handle.idx];
+						uint16_t decl = !isValid(vb.m_decl) ? draw.m_stream[0].m_decl.idx : vb.m_decl.idx;
 						const VertexDeclD3D9& vertexDecl = m_vertexDecls[decl];
 						numVertices = vb.m_size/vertexDecl.m_decl.m_stride;
 					}
@@ -4114,7 +4115,7 @@ namespace bgfx { namespace d3d9
 							numPrimsRendered  = numPrimsSubmitted*draw.m_numInstances;
 
 							DX_CHECK(device->DrawIndexedPrimitive(prim.m_type
-								, draw.m_startVertex
+								, draw.m_stream[0].m_startVertex
 								, 0
 								, numVertices
 								, 0
@@ -4129,7 +4130,7 @@ namespace bgfx { namespace d3d9
 							numPrimsRendered  = numPrimsSubmitted*draw.m_numInstances;
 
 							DX_CHECK(device->DrawIndexedPrimitive(prim.m_type
-								, draw.m_startVertex
+								, draw.m_stream[0].m_startVertex
 								, 0
 								, numVertices
 								, draw.m_startIndex
@@ -4144,7 +4145,7 @@ namespace bgfx { namespace d3d9
 						numPrimsRendered  = numPrimsSubmitted*draw.m_numInstances;
 
 						DX_CHECK(device->DrawPrimitive(prim.m_type
-							, draw.m_startVertex
+							, draw.m_stream[0].m_startVertex
 							, numPrimsSubmitted
 							) );
 					}

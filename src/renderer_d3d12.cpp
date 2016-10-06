@@ -987,12 +987,6 @@ namespace bgfx { namespace d3d12
 						, (void**)&m_rootSignature
 						) );
 
-				UniformHandle handle = BGFX_INVALID_HANDLE;
-				for (uint32_t ii = 0; ii < PredefinedUniform::Count; ++ii)
-				{
-					m_uniformReg.add(handle, getPredefinedUniformName(PredefinedUniform::Enum(ii) ), &m_predefinedUniforms[ii]);
-				}
-
 				g_caps.supported |= ( 0
 									| BGFX_CAPS_TEXTURE_3D
 									| BGFX_CAPS_TEXTURE_COMPARE_ALL
@@ -1555,6 +1549,7 @@ namespace bgfx { namespace d3d12
 		{
 			BX_FREE(g_allocator, m_uniforms[_handle.idx]);
 			m_uniforms[_handle.idx] = NULL;
+			m_uniformReg.remove(_handle);
 		}
 
 		void saveScreenShot(const char* _filePath) BX_OVERRIDE
@@ -3436,10 +3431,10 @@ data.NumQualityLevels = 0;
 	{
 		Enum type = Enum(!!isValid(_draw.m_indexBuffer) );
 
-		VertexBufferD3D12& vb = s_renderD3D12->m_vertexBuffers[_draw.m_vertexBuffer.idx];
+		VertexBufferD3D12& vb = s_renderD3D12->m_vertexBuffers[_draw.m_stream[0].m_handle.idx];
 		vb.setState(_commandList, D3D12_RESOURCE_STATE_GENERIC_READ);
 
-		uint16_t declIdx = !isValid(vb.m_decl) ? _draw.m_vertexDecl.idx : vb.m_decl.idx;
+		uint16_t declIdx = !isValid(vb.m_decl) ? _draw.m_stream[0].m_decl.idx : vb.m_decl.idx;
 		const VertexDecl& vertexDecl = s_renderD3D12->m_vertexDecls[declIdx];
 		uint32_t numIndices = 0;
 
@@ -3469,7 +3464,7 @@ data.NumQualityLevels = 0;
 			}
 			cmd.draw.InstanceCount = _draw.m_numInstances;
 			cmd.draw.VertexCountPerInstance = numVertices;
-			cmd.draw.StartVertexLocation    = _draw.m_startVertex;
+			cmd.draw.StartVertexLocation    = _draw.m_stream[0].m_startVertex;
 			cmd.draw.StartInstanceLocation  = 0;
 		}
 		else
@@ -3511,7 +3506,7 @@ data.NumQualityLevels = 0;
 			cmd.drawIndexed.IndexCountPerInstance = numIndices;
 			cmd.drawIndexed.InstanceCount = _draw.m_numInstances;
 			cmd.drawIndexed.StartIndexLocation = _draw.m_startIndex;
-			cmd.drawIndexed.BaseVertexLocation = _draw.m_startVertex;
+			cmd.drawIndexed.BaseVertexLocation = _draw.m_stream[0].m_startVertex;
 			cmd.drawIndexed.StartInstanceLocation = 0;
 		}
 
@@ -3879,7 +3874,7 @@ data.NumQualityLevels = 0;
 				else if (0 == (BGFX_UNIFORM_SAMPLERBIT & type) )
 				{
 					const UniformInfo* info = s_renderD3D12->m_uniformReg.find(name);
-					BX_CHECK(NULL != info, "User defined uniform '%s' is not found, it won't be set.", name);
+					BX_WARN(NULL != info, "User defined uniform '%s' is not found, it won't be set.", name);
 
 					if (NULL != info)
 					{
@@ -5205,7 +5200,7 @@ data.NumQualityLevels = 0;
 
 				rendererUpdateUniforms(this, _render->m_uniformBuffer, draw.m_constBegin, draw.m_constEnd);
 
-				if (isValid(draw.m_vertexBuffer) )
+				if (isValid(draw.m_stream[0].m_handle) )
 				{
 					const uint64_t state = draw.m_stateFlags;
 					bool hasFactor = 0
@@ -5215,8 +5210,8 @@ data.NumQualityLevels = 0;
 						|| f3 == (state & f3)
 						;
 
-					const VertexBufferD3D12& vb = m_vertexBuffers[draw.m_vertexBuffer.idx];
-					uint16_t declIdx = !isValid(vb.m_decl) ? draw.m_vertexDecl.idx : vb.m_decl.idx;
+					const VertexBufferD3D12& vb = m_vertexBuffers[draw.m_stream[0].m_handle.idx];
+					uint16_t declIdx = !isValid(vb.m_decl) ? draw.m_stream[0].m_decl.idx : vb.m_decl.idx;
 
 					ID3D12PipelineState* pso =
 						getPipelineState(state
