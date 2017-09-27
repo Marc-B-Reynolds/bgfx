@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2016 Branimir Karadzic. All rights reserved.
+ * Copyright 2011-2017 Branimir Karadzic. All rights reserved.
  * License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
  */
 
@@ -107,7 +107,7 @@ typedef uint64_t GLuint64;
 #endif // BGFX_CONFIG_RENDERER_OPENGL
 
 #include "renderer.h"
-#include "hmd_ovr.h"
+#include "hmd.h"
 #include "hmd_openvr.h"
 #include "debug_renderdoc.h"
 
@@ -720,6 +720,10 @@ typedef uint64_t GLuint64;
 #	define GL_IMAGE_2D 0x904D
 #endif // GL_IMAGE_2D
 
+#ifndef GL_IMAGE_2D_ARRAY
+#	define GL_IMAGE_2D_ARRAY 0x9053
+#endif // GL_IMAGE_2D_ARRAY
+
 #ifndef GL_IMAGE_3D
 #	define GL_IMAGE_3D 0x904E
 #endif // GL_IMAGE_3D
@@ -915,9 +919,23 @@ typedef uint64_t GLuint64;
 #	define GL_DEBUG_SEVERITY_NOTIFICATION 0x826b
 #endif // GL_DEBUG_SEVERITY_NOTIFICATION
 
-#if BX_PLATFORM_NACL
-#	include "glcontext_ppapi.h"
-#elif BX_PLATFORM_WINDOWS
+#ifndef GL_LINE
+#	define GL_LINE 0x1B01
+#endif // GL_LINE
+
+#ifndef GL_FILL
+#	define GL_FILL 0x1B02
+#endif // GL_FILL
+
+#ifndef GL_MULTISAMPLE
+#	define GL_MULTISAMPLE 0x809D
+#endif // GL_MULTISAMPLE
+
+#ifndef GL_LINE_SMOOTH
+#	define GL_LINE_SMOOTH 0x0B20
+#endif // GL_LINE_SMOOTH
+
+#if BX_PLATFORM_WINDOWS
 #	include <windows.h>
 #elif BX_PLATFORM_LINUX || BX_PLATFORM_BSD
 #	include "glcontext_glx.h"
@@ -950,32 +968,6 @@ namespace bgfx
 
 namespace bgfx { namespace gl
 {
-#if BGFX_CONFIG_USE_OVR
-	struct OVRBufferGL : public OVRBufferI
-	{
-		virtual void create(const ovrSession& _session, int _eyeIdx, int _msaaSamples) BX_OVERRIDE;
-		virtual void destroy(const ovrSession& _session) BX_OVERRIDE;
-		virtual void render(const ovrSession& _session) BX_OVERRIDE;
-		virtual void postRender(const ovrSession& _sesion) BX_OVERRIDE;
-
-		GLuint m_eyeFbo;
-		GLuint m_eyeTexId;
-		GLuint m_depthBuffer;
-		GLuint m_msaaEyeFbo;
-		GLuint m_msaaEyeTexId;
-		GLuint m_msaaDepthBuffer;
-	};
-
-	struct OVRMirrorGL : public OVRMirrorI
-	{
-		virtual void create(const ovrSession& _session, int _width, int _height) BX_OVERRIDE;
-		virtual void destroy(const ovrSession& _session) BX_OVERRIDE;
-		virtual void blit(const ovrSession& _session) BX_OVERRIDE;
-
-		GLuint m_mirrorFBO;
-	};
-#endif // BGFX_CONFIG_USE_OVR
-
 	void dumpExtensions(const char* _extensions);
 
 	const char* glEnumName(GLenum _enum);
@@ -1314,8 +1306,9 @@ namespace bgfx { namespace gl
 			: m_swapChain(NULL)
 			, m_denseIdx(UINT16_MAX)
 			, m_num(0)
+			, m_needPresent(false)
 		{
-			memset(m_fbo, 0, sizeof(m_fbo) );
+			bx::memSet(m_fbo, 0, sizeof(m_fbo) );
 		}
 
 		void create(uint8_t _num, const Attachment* _attachment);
@@ -1332,6 +1325,7 @@ namespace bgfx { namespace gl
 		uint16_t m_denseIdx;
 		uint8_t  m_num;
 		uint8_t  m_numTh;
+		bool     m_needPresent;
 		Attachment m_attachment[BGFX_CONFIG_MAX_FRAME_BUFFER_ATTACHMENTS];
 	};
 
@@ -1347,8 +1341,27 @@ namespace bgfx { namespace gl
 		void create(const ShaderGL& _vsh, const ShaderGL& _fsh);
 		void destroy();
 		void init();
-		void bindAttributes(const VertexDecl& _vertexDecl, uint32_t _baseVertex = 0) const;
 		void bindInstanceData(uint32_t _stride, uint32_t _baseVertex = 0) const;
+
+		void bindAttributesBegin()
+		{
+			bx::memCopy(m_unboundUsedAttrib, m_used, sizeof(m_unboundUsedAttrib) );
+		}
+
+		void bindAttributes(const VertexDecl& _vertexDecl, uint32_t _baseVertex = 0);
+
+		void bindAttributesEnd()
+		{
+			for (uint32_t ii = 0, iiEnd = m_usedCount; ii < iiEnd; ++ii)
+			{
+				if (Attrib::Count != m_unboundUsedAttrib[ii])
+				{
+					Attrib::Enum attr = Attrib::Enum(m_unboundUsedAttrib[ii]);
+					GLint loc = m_attributes[attr];
+					GL_CHECK(glDisableVertexAttribArray(loc) );
+				}
+			}
+		}
 
 		void add(uint32_t _hash)
 		{
@@ -1357,8 +1370,10 @@ namespace bgfx { namespace gl
 
 		GLuint m_id;
 
-		uint8_t m_used[Attrib::Count+1]; // dense
-		GLint m_attributes[Attrib::Count]; // sparse
+		uint8_t m_unboundUsedAttrib[Attrib::Count]; // For tracking unbound used attributes between begin()/end().
+		uint8_t m_usedCount;
+		uint8_t m_used[Attrib::Count]; // Dense.
+		GLint m_attributes[Attrib::Count]; // Sparse.
 		GLint m_instanceData[BGFX_CONFIG_MAX_INSTANCE_DATA_COUNT+1];
 
 		GLint m_sampler[BGFX_CONFIG_MAX_TEXTURE_SAMPLERS];
@@ -1488,6 +1503,7 @@ namespace bgfx { namespace gl
 		void begin(Frame* _render, OcclusionQueryHandle _handle);
 		void end();
 		void resolve(Frame* _render, bool _wait = false);
+		void invalidate(OcclusionQueryHandle _handle);
 
 		struct Query
 		{
@@ -1495,8 +1511,47 @@ namespace bgfx { namespace gl
 			OcclusionQueryHandle m_handle;
 		};
 
-		Query m_query[BGFX_CONFIG_MAX_OCCUSION_QUERIES];
+		Query m_query[BGFX_CONFIG_MAX_OCCLUSION_QUERIES];
 		bx::RingBufferControl m_control;
+	};
+
+	class LineReader : public bx::ReaderI
+	{
+	public:
+		LineReader(const void* _str)
+			: m_str( (const char*)_str)
+			, m_pos(0)
+			, m_size(bx::strLen( (const char*)_str) )
+		{
+		}
+
+		virtual int32_t read(void* _data, int32_t _size, bx::Error* _err) BX_OVERRIDE
+		{
+			if (m_str[m_pos] == '\0'
+			||  m_pos == m_size)
+			{
+				BX_ERROR_SET(_err, BX_ERROR_READERWRITER_EOF, "LineReader: EOF.");
+				return 0;
+			}
+
+			uint32_t pos = m_pos;
+			const char* str = &m_str[pos];
+			const char* nl = bx::strnl(str);
+			pos += (uint32_t)(nl - str);
+
+			const char* eol = &m_str[pos];
+
+			uint32_t size = bx::uint32_min(uint32_t(eol - str), _size);
+
+			bx::memCopy(_data, str, size);
+			m_pos += size;
+
+			return size;
+		}
+
+		const char* m_str;
+		uint32_t m_pos;
+		uint32_t m_size;
 	};
 
 } /* namespace gl */ } // namespace bgfx

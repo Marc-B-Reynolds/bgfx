@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2016 Branimir Karadzic. All rights reserved.
+ * Copyright 2011-2017 Branimir Karadzic. All rights reserved.
  * License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
  */
 
@@ -97,7 +97,7 @@ void renderScreenSpaceQuad(uint8_t _view, bgfx::ProgramHandle _program, float _x
 
 		bgfx::setState(BGFX_STATE_DEFAULT);
 		bgfx::setIndexBuffer(&tib);
-		bgfx::setVertexBuffer(&tvb);
+		bgfx::setVertexBuffer(0, &tvb);
 		bgfx::submit(_view, _program);
 	}
 }
