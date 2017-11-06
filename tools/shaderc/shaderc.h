@@ -61,7 +61,7 @@ namespace bgfx
 #include <bx/uint32_t.h>
 #include <bx/string.h>
 #include <bx/hash.h>
-#include <bx/crtimpl.h>
+#include <bx/file.h>
 #include "../../src/vertexdecl.h"
 
 namespace bgfx
@@ -78,7 +78,7 @@ namespace bgfx
 		{
 		}
 
-		virtual int32_t read(void* _data, int32_t _size, bx::Error* _err) BX_OVERRIDE
+		virtual int32_t read(void* _data, int32_t _size, bx::Error* _err) override
 		{
 			if (m_str[m_pos] == '\0'
 			||  m_pos == m_size)
@@ -129,10 +129,10 @@ namespace bgfx
 	int32_t writef(bx::WriterI* _writer, const char* _format, ...);
 	void writeFile(const char* _filePath, const void* _data, int32_t _size);
 
-	bool compileGLSLShader(bx::CommandLine& _cmdLine, uint32_t _version, const std::string& _code, bx::WriterI* _writer);
-	bool compileHLSLShader(bx::CommandLine& _cmdLine, uint32_t _version, const std::string& _code, bx::WriterI* _writer);
-	bool compilePSSLShader(bx::CommandLine& _cmdLine, uint32_t _version, const std::string& _code, bx::WriterI* _writer);
-	bool compileSPIRVShader(bx::CommandLine& _cmdLine, uint32_t _version, const std::string& _code, bx::WriterI* _writer);
+	bool compileGLSLShader(const bx::CommandLine& _cmdLine, uint32_t _version, const std::string& _code, bx::WriterI* _writer);
+	bool compileHLSLShader(const bx::CommandLine& _cmdLine, uint32_t _version, const std::string& _code, bx::WriterI* _writer);
+	bool compilePSSLShader(const bx::CommandLine& _cmdLine, uint32_t _version, const std::string& _code, bx::WriterI* _writer);
+	bool compileSPIRVShader(const bx::CommandLine& _cmdLine, uint32_t _version, const std::string& _code, bx::WriterI* _writer);
 
 } // namespace bgfx
 

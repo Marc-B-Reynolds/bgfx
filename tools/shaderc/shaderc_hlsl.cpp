@@ -545,7 +545,7 @@ namespace bgfx { namespace hlsl
 		return true;
 	}
 
-	static bool compile(bx::CommandLine& _cmdLine, uint32_t _version, const std::string& _code, bx::WriterI* _writer, bool _firstPass)
+	static bool compile(const bx::CommandLine& _cmdLine, uint32_t _version, const std::string& _code, bx::WriterI* _writer, bool _firstPass)
 	{
 		const char* profile = _cmdLine.findOption('p', "profile");
 		if (NULL == profile)
@@ -756,7 +756,7 @@ namespace bgfx { namespace hlsl
 		}
 
 		{
-			uint16_t shaderSize = (uint16_t)code->GetBufferSize();
+			uint32_t shaderSize = uint32_t(code->GetBufferSize() );
 			bx::write(_writer, shaderSize);
 			bx::write(_writer, code->GetBufferPointer(), shaderSize);
 			uint8_t nul = 0;
@@ -806,7 +806,7 @@ namespace bgfx { namespace hlsl
 
 } // namespace hlsl
 
-	bool compileHLSLShader(bx::CommandLine& _cmdLine, uint32_t _version, const std::string& _code, bx::WriterI* _writer)
+	bool compileHLSLShader(const bx::CommandLine& _cmdLine, uint32_t _version, const std::string& _code, bx::WriterI* _writer)
 	{
 		return hlsl::compile(_cmdLine, _version, _code, _writer, true);
 	}
@@ -817,7 +817,7 @@ namespace bgfx { namespace hlsl
 
 namespace bgfx
 {
-	bool compileHLSLShader(bx::CommandLine& _cmdLine, uint32_t _version, const std::string& _code, bx::WriterI* _writer)
+	bool compileHLSLShader(const bx::CommandLine& _cmdLine, uint32_t _version, const std::string& _code, bx::WriterI* _writer)
 	{
 		BX_UNUSED(_cmdLine, _version, _code, _writer);
 		fprintf(stderr, "HLSL compiler is not supported on this platform.\n");

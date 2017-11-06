@@ -110,7 +110,44 @@ typedef enum {
     EShSourceNone,
     EShSourceGlsl,
     EShSourceHlsl,
-} EShSource;          // if EShLanguage were EShStage, this could be EShLanguage instead
+} EShSource;                  // if EShLanguage were EShStage, this could be EShLanguage instead
+
+typedef enum {
+    EShClientNone,
+    EShClientVulkan,
+    EShClientOpenGL,
+} EShClient;
+
+typedef enum {
+    EShTargetNone,
+    EshTargetSpv,
+} EShTargetLanguage;
+
+struct TInputLanguage {
+    EShSource languageFamily; // redundant information with other input, this one overrides when not EShSourceNone
+    EShLanguage stage;        // redundant information with other input, this one overrides when not EShSourceNone
+    EShClient dialect;
+    int dialectVersion;       // version of client's language definition, not the client (when not EShClientNone)
+};
+
+struct TClient {
+    EShClient client;
+    int version;              // version of client itself (not the client's input dialect)
+};
+
+struct TTarget {
+    EShTargetLanguage language;
+    unsigned int version;     // the version to target, if SPIR-V, defined by "word 1" of the SPIR-V binary header
+};
+
+// All source/client/target versions and settings.
+// Can override previous methods of setting, when items are set here.
+// Expected to grow, as more are added, rather than growing parameter lists.
+struct TEnvironment {
+    TInputLanguage input;     // definition of the input language
+    TClient client;           // what client is the overall compilation being done for?
+    TTarget target;           // what to generate
+};
 
 const char* StageName(EShLanguage);
 
@@ -309,6 +346,7 @@ public:
     void setPreamble(const char* s) { preamble = s; }
     void setEntryPoint(const char* entryPoint);
     void setSourceEntryPoint(const char* sourceEntryPointName);
+    void addProcesses(const std::vector<std::string>&);
     void setShiftSamplerBinding(unsigned int base);
     void setShiftTextureBinding(unsigned int base);
     void setShiftImageBinding(unsigned int base);
@@ -323,6 +361,25 @@ public:
     void setFlattenUniformArrays(bool flatten);
     void setNoStorageFormat(bool useUnknownFormat);
     void setTextureSamplerTransformMode(EShTextureSamplerTransformMode mode);
+
+    // For setting up the environment (initialized in the constructor):
+    void setEnvInput(EShSource lang, EShLanguage envStage, EShClient client, int version)
+    {
+        environment.input.languageFamily = lang;
+        environment.input.stage = envStage;
+        environment.input.dialect = client;
+        environment.input.dialectVersion = version;
+    }
+    void setEnvClient(EShClient client, int version)
+    {
+        environment.client.client = client;
+        environment.client.version = version;
+    }
+    void setEnvTarget(EShTargetLanguage lang, unsigned int version)
+    {
+        environment.target.language = lang;
+        environment.target.version = version;
+    }
 
     // Interface to #include handlers.
     //
@@ -463,6 +520,8 @@ protected:
     // a function in the source string can be renamed FROM this TO the name given in setEntryPoint.
     std::string sourceEntryPointName;
 
+    TEnvironment environment;
+
     friend class TProgram;
 
 private:
@@ -474,9 +533,10 @@ class TIoMapper;
 
 // Allows to customize the binding layout after linking.
 // All used uniform variables will invoke at least validateBinding.
-// If validateBinding returned true then the other resolveBinding
-// and resolveSet are invoked to resolve the binding and descriptor
-// set index respectively.
+// If validateBinding returned true then the other resolveBinding,
+// resolveSet, and resolveLocation are invoked to resolve the binding
+// and descriptor set index respectively.
+//
 // Invocations happen in a particular order:
 // 1) all shader inputs
 // 2) all shader outputs
@@ -508,6 +568,9 @@ public:
   // Should return a value >= 0 if the current set should be overridden.
   // Return -1 if the current set (including no set) should be kept.
   virtual int resolveSet(EShLanguage stage, const char* name, const TType& type, bool is_live) = 0;
+  // Should return a value >= 0 if the current location should be overridden.
+  // Return -1 if the current location (including no location) should be kept.
+  virtual int resolveUniformLocation(EShLanguage stage, const char* name, const TType& type, bool is_live) = 0;
   // Should return true if the resulting/current setup would be okay.
   // Basic idea is to do aliasing checks and reject invalid semantic names.
   virtual bool validateInOut(EShLanguage stage, const char* name, const TType& type, bool is_live) = 0;
@@ -525,7 +588,13 @@ public:
   // Notification of a in or out variable
   virtual void notifyInOut(EShLanguage stage, const char* name, const TType& type, bool is_live) = 0;
   // Called by mapIO when it has finished the notify pass
-  virtual void endNotifications() = 0;
+  virtual void endNotifications(EShLanguage stage) = 0;
+  // Called by mapIO when it starts its notify pass for the given stage
+  virtual void beginNotifications(EShLanguage stage) = 0;
+  // Called by mipIO when it starts its resolve pass for the given stage
+  virtual void beginResolve(EShLanguage stage) = 0;
+  // Called by mapIO when it has finished the resolve pass
+  virtual void endResolve(EShLanguage stage) = 0;
 };
 
 // Make one TProgram per set of shaders that will get linked together.  Add all
@@ -555,6 +624,7 @@ public:
     const char* getUniformBlockName(int blockIndex) const; // can be used for glGetActiveUniformBlockName()
     int getUniformBlockSize(int blockIndex) const;         // can be used for glGetActiveUniformBlockiv(UNIFORM_BLOCK_DATA_SIZE)
     int getUniformIndex(const char* name) const;           // can be used for glGetUniformIndices()
+    int getUniformBinding(int index) const;                // returns the binding number
     int getUniformBlockIndex(int index) const;             // can be used for glGetActiveUniformsiv(GL_UNIFORM_BLOCK_INDEX)
     int getUniformBlockCounterIndex(int index) const;      // returns block index of associated counter.
     int getUniformType(int index) const;                   // can be used for glGetActiveUniformsiv(GL_UNIFORM_TYPE)

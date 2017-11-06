@@ -31,7 +31,6 @@
 
 #include <bx/bx.h>
 #include <bx/allocator.h>
-#include <bx/crtimpl.h>
 #include <bx/uint32_t.h>
 
 BX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4244); // warning C4244: '=' : conversion from '' to '', possible loss of data
@@ -185,7 +184,7 @@ namespace
 
 		for (i = 0; i < gl->ntextures; i++)
 		{
-			if (gl->textures[i].id.idx == bgfx::invalidHandle)
+			if (gl->textures[i].id.idx == bgfx::kInvalidHandle)
 			{
 				tex = &gl->textures[i];
 				break;
@@ -237,10 +236,10 @@ namespace
 				if (bgfx::isValid(gl->textures[ii].id)
 				&& (gl->textures[ii].flags & NVG_IMAGE_NODELETE) == 0)
 				{
-					bgfx::destroyTexture(gl->textures[ii].id);
+					bgfx::destroy(gl->textures[ii].id);
 				}
 				bx::memSet(&gl->textures[ii], 0, sizeof(gl->textures[ii]) );
-				gl->textures[ii].id.idx = bgfx::invalidHandle;
+				gl->textures[ii].id.idx = bgfx::kInvalidHandle;
 				return 1;
 			}
 		}
@@ -280,7 +279,7 @@ namespace
 		}
 		else
 		{
-			gl->u_halfTexel.idx = bgfx::invalidHandle;
+			gl->u_halfTexel.idx = bgfx::kInvalidHandle;
 		}
 
 		s_nvgDecl
@@ -1052,22 +1051,22 @@ namespace
 			return;
 		}
 
-		bgfx::destroyProgram(gl->prog);
-		bgfx::destroyTexture(gl->texMissing);
+		bgfx::destroy(gl->prog);
+		bgfx::destroy(gl->texMissing);
 
-		bgfx::destroyUniform(gl->u_scissorMat);
-		bgfx::destroyUniform(gl->u_paintMat);
-		bgfx::destroyUniform(gl->u_innerCol);
-		bgfx::destroyUniform(gl->u_outerCol);
-		bgfx::destroyUniform(gl->u_viewSize);
-		bgfx::destroyUniform(gl->u_scissorExtScale);
-		bgfx::destroyUniform(gl->u_extentRadius);
-		bgfx::destroyUniform(gl->u_params);
-		bgfx::destroyUniform(gl->s_tex);
+		bgfx::destroy(gl->u_scissorMat);
+		bgfx::destroy(gl->u_paintMat);
+		bgfx::destroy(gl->u_innerCol);
+		bgfx::destroy(gl->u_outerCol);
+		bgfx::destroy(gl->u_viewSize);
+		bgfx::destroy(gl->u_scissorExtScale);
+		bgfx::destroy(gl->u_extentRadius);
+		bgfx::destroy(gl->u_params);
+		bgfx::destroy(gl->s_tex);
 
 		if (bgfx::isValid(gl->u_halfTexel) )
 		{
-			bgfx::destroyUniform(gl->u_halfTexel);
+			bgfx::destroy(gl->u_halfTexel);
 		}
 
 		for (uint32_t ii = 0, num = gl->ntextures; ii < num; ++ii)
@@ -1075,7 +1074,7 @@ namespace
 			if (bgfx::isValid(gl->textures[ii].id)
 			&& (gl->textures[ii].flags & NVG_IMAGE_NODELETE) == 0)
 			{
-				bgfx::destroyTexture(gl->textures[ii].id);
+				bgfx::destroy(gl->textures[ii].id);
 			}
 		}
 
@@ -1093,13 +1092,8 @@ NVGcontext* nvgCreate(int edgeaa, unsigned char _viewId, bx::AllocatorI* _alloca
 {
 	if (NULL == _allocator)
 	{
-#if BX_CONFIG_ALLOCATOR_CRT
-		static bx::CrtAllocator allocator;
+		static bx::DefaultAllocator allocator;
 		_allocator = &allocator;
-#else
-		BX_CHECK(false, "No allocator has been passed to nvgCreate(). Either specify a bx::AllocatorI instance or enable BX_CONFIG_ALLOCATOR_CRT directive.");
-		return NULL;
-#endif // BX_CONFIG_ALLOCATOR_CRT
 	}
 
 	struct NVGparams params;
@@ -1213,7 +1207,7 @@ NVGLUframebuffer* nvgluCreateFramebuffer(NVGcontext* _ctx, int _width, int _heig
 
 	if (NULL == tex)
 	{
-		bgfx::destroyFrameBuffer(fbh);
+		bgfx::destroy(fbh);
 		return NULL;
 	}
 
@@ -1256,7 +1250,7 @@ void nvgluDeleteFramebuffer(NVGLUframebuffer* framebuffer)
 
 	if (bgfx::isValid(framebuffer->handle))
 	{
-		bgfx::destroyFrameBuffer(framebuffer->handle);
+		bgfx::destroy(framebuffer->handle);
 	}
 
 	struct NVGparams* params = nvgInternalParams(framebuffer->ctx);
@@ -1269,5 +1263,5 @@ void nvgluSetViewFramebuffer(uint8_t viewId, NVGLUframebuffer* framebuffer)
 {
 	framebuffer->viewId = viewId;
 	bgfx::setViewFrameBuffer(viewId, framebuffer->handle);
-	bgfx::setViewSeq(viewId, true);
+	bgfx::setViewMode(viewId, bgfx::ViewMode::Sequential);
 }

@@ -11,7 +11,6 @@
 #include "../packrect.h"
 
 #include <bx/easing.h>
-#include <bx/crtimpl.h>
 #include <bx/handlealloc.h>
 
 #include "vs_particle.bin.h"
@@ -24,52 +23,6 @@ static const bgfx::EmbeddedShader s_embeddedShaders[] =
 
 	BGFX_EMBEDDED_SHADER_END()
 };
-
-static const bx::EaseFn s_easeFunc[] =
-{
-	bx::easeLinear,
-	bx::easeInQuad,
-	bx::easeOutQuad,
-	bx::easeInOutQuad,
-	bx::easeOutInQuad,
-	bx::easeInCubic,
-	bx::easeOutCubic,
-	bx::easeInOutCubic,
-	bx::easeOutInCubic,
-	bx::easeInQuart,
-	bx::easeOutQuart,
-	bx::easeInOutQuart,
-	bx::easeOutInQuart,
-	bx::easeInQuint,
-	bx::easeOutQuint,
-	bx::easeInOutQuint,
-	bx::easeOutInQuint,
-	bx::easeInSine,
-	bx::easeOutSine,
-	bx::easeInOutSine,
-	bx::easeOutInSine,
-	bx::easeInExpo,
-	bx::easeOutExpo,
-	bx::easeInOutExpo,
-	bx::easeOutInExpo,
-	bx::easeInCirc,
-	bx::easeOutCirc,
-	bx::easeInOutCirc,
-	bx::easeOutInCirc,
-	bx::easeInElastic,
-	bx::easeOutElastic,
-	bx::easeInOutElastic,
-	bx::easeOutInElastic,
-	bx::easeInBack,
-	bx::easeOutBack,
-	bx::easeInOutBack,
-	bx::easeOutInBack,
-	bx::easeInBounce,
-	bx::easeOutBounce,
-	bx::easeInOutBounce,
-	bx::easeOutInBounce,
-};
-BX_STATIC_ASSERT(BX_COUNTOF(s_easeFunc) == bx::Easing::Count);
 
 struct PosColorTexCoord0Vertex
 {
@@ -195,7 +148,7 @@ namespace ps
 
 		EmitterSpriteHandle create(uint16_t _width, uint16_t _height)
 		{
-			EmitterSpriteHandle handle = { bx::HandleAlloc::invalid };
+			EmitterSpriteHandle handle = { bx::kInvalidHandle };
 
 			if (m_handleAlloc.getNumHandles() < m_handleAlloc.getMaxHandles() )
 			{
@@ -368,15 +321,15 @@ namespace ps
 
 		uint32_t render(const float _uv[4], const float* _mtxView, const float* _eye, uint32_t _first, uint32_t _max, ParticleSort* _outSort, PosColorTexCoord0Vertex* _outVertices)
 		{
-			bx::EaseFn easeRgba  = s_easeFunc[m_uniforms.m_easeRgba];
-			bx::EaseFn easePos   = s_easeFunc[m_uniforms.m_easePos];
-			bx::EaseFn easeBlend = s_easeFunc[m_uniforms.m_easeBlend];
-			bx::EaseFn easeScale = s_easeFunc[m_uniforms.m_easeScale];
+			bx::EaseFn easeRgba  = bx::getEaseFunc(m_uniforms.m_easeRgba);
+			bx::EaseFn easePos   = bx::getEaseFunc(m_uniforms.m_easePos);
+			bx::EaseFn easeBlend = bx::getEaseFunc(m_uniforms.m_easeBlend);
+			bx::EaseFn easeScale = bx::getEaseFunc(m_uniforms.m_easeScale);
 
 			Aabb aabb =
 			{
-				{  bx::huge,  bx::huge,  bx::huge },
-				{ -bx::huge, -bx::huge, -bx::huge },
+				{  bx::kHuge,  bx::kHuge,  bx::kHuge },
+				{ -bx::kHuge, -bx::kHuge, -bx::kHuge },
 			};
 
 			for (uint32_t jj = 0, num = m_num, current = _first
@@ -494,13 +447,11 @@ namespace ps
 		{
 			m_allocator = _allocator;
 
-#if BX_CONFIG_ALLOCATOR_CRT
 			if (NULL == _allocator)
 			{
-				static bx::CrtAllocator allocator;
+				static bx::DefaultAllocator allocator;
 				m_allocator = &allocator;
 			}
-#endif // BX_CONFIG_ALLOCATOR_CRT
 
 			m_emitterAlloc = bx::createHandleAlloc(m_allocator, _maxEmitters);
 			m_emitter = (Emitter*)BX_ALLOC(m_allocator, sizeof(Emitter)*_maxEmitters);
@@ -528,9 +479,9 @@ namespace ps
 
 		void shutdown()
 		{
-			bgfx::destroyProgram(m_particleProgram);
-			bgfx::destroyTexture(m_texture);
-			bgfx::destroyUniform(s_texColor);
+			bgfx::destroy(m_particleProgram);
+			bgfx::destroy(m_texture);
+			bgfx::destroy(s_texColor);
 
 			bx::destroyHandleAlloc(m_allocator, m_emitterAlloc);
 			BX_FREE(m_allocator, m_emitter);
