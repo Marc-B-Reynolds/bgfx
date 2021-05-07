@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2017 Branimir Karadzic. All rights reserved.
+ * Copyright 2011-2021 Branimir Karadzic. All rights reserved.
  * License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
  */
 
@@ -107,7 +107,7 @@ namespace bgfx { namespace hlsl
 
 			if (g_verbose)
 			{
-				char filePath[MAX_PATH];
+				char filePath[bx::kMaxFilePath];
 				GetModuleFileNameA( (HMODULE)s_d3dcompilerdll, filePath, sizeof(filePath) );
 				BX_TRACE("Loaded %s compiler (%s).", compiler->fileName, filePath);
 			}
@@ -115,7 +115,7 @@ namespace bgfx { namespace hlsl
 			return compiler;
 		}
 
-		fprintf(stderr, "Error: Unable to open D3DCompiler_*.dll shader compiler.\n");
+		bx::printf("Error: Unable to open D3DCompiler_*.dll shader compiler.\n");
 		return NULL;
 	}
 
@@ -213,14 +213,14 @@ namespace bgfx { namespace hlsl
 
 	static const UniformRemap s_uniformRemap[] =
 	{
-		{ UniformType::Int1, D3D_SVC_SCALAR,         D3D_SVT_INT,         0, 0 },
+		{ UniformType::Sampler, D3D_SVC_SCALAR,         D3D_SVT_INT,         0, 0 },
 		{ UniformType::Vec4, D3D_SVC_VECTOR,         D3D_SVT_FLOAT,       0, 0 },
 		{ UniformType::Mat3, D3D_SVC_MATRIX_COLUMNS, D3D_SVT_FLOAT,       3, 3 },
 		{ UniformType::Mat4, D3D_SVC_MATRIX_COLUMNS, D3D_SVT_FLOAT,       4, 4 },
-		{ UniformType::Int1, D3D_SVC_OBJECT,         D3D_SVT_SAMPLER,     0, 0 },
-		{ UniformType::Int1, D3D_SVC_OBJECT,         D3D_SVT_SAMPLER2D,   0, 0 },
-		{ UniformType::Int1, D3D_SVC_OBJECT,         D3D_SVT_SAMPLER3D,   0, 0 },
-		{ UniformType::Int1, D3D_SVC_OBJECT,         D3D_SVT_SAMPLERCUBE, 0, 0 },
+		{ UniformType::Sampler, D3D_SVC_OBJECT,         D3D_SVT_SAMPLER,     0, 0 },
+		{ UniformType::Sampler, D3D_SVC_OBJECT,         D3D_SVT_SAMPLER2D,   0, 0 },
+		{ UniformType::Sampler, D3D_SVC_OBJECT,         D3D_SVT_SAMPLER3D,   0, 0 },
+		{ UniformType::Sampler, D3D_SVC_OBJECT,         D3D_SVT_SAMPLERCUBE, 0, 0 },
 	};
 
 	UniformType::Enum findUniformType(const D3D11_SHADER_TYPE_DESC& constDesc)
@@ -311,7 +311,7 @@ namespace bgfx { namespace hlsl
 				uint32_t tableSize = (commentSize - 1) * 4;
 				if (tableSize < sizeof(CTHeader) || header->Size != sizeof(CTHeader) )
 				{
-					fprintf(stderr, "Error: Invalid constant table data\n");
+					bx::printf("Error: Invalid constant table data\n");
 					return false;
 				}
 				break;
@@ -323,7 +323,7 @@ namespace bgfx { namespace hlsl
 
 		if (!header)
 		{
-			fprintf(stderr, "Error: Could not find constant table data\n");
+			bx::printf("Error: Could not find constant table data\n");
 			return false;
 		}
 
@@ -366,7 +366,7 @@ namespace bgfx { namespace hlsl
 				Uniform un;
 				un.name = '$' == name[0] ? name + 1 : name;
 				un.type = isSampler(desc.Type)
-					? UniformType::Enum(BGFX_UNIFORM_SAMPLERBIT | type)
+					? UniformType::Enum(kUniformSamplerBit | type)
 					: type
 					;
 				un.num = (uint8_t)ctType.Elements;
@@ -390,7 +390,7 @@ namespace bgfx { namespace hlsl
 			);
 		if (FAILED(hr) )
 		{
-			fprintf(stderr, "Error: D3DReflect failed 0x%08x\n", (uint32_t)hr);
+			bx::printf("Error: D3DReflect failed 0x%08x\n", (uint32_t)hr);
 			return false;
 		}
 
@@ -398,7 +398,7 @@ namespace bgfx { namespace hlsl
 		hr = reflect->GetDesc(&desc);
 		if (FAILED(hr) )
 		{
-			fprintf(stderr, "Error: ID3D11ShaderReflection::GetDesc failed 0x%08x\n", (uint32_t)hr);
+			bx::printf("Error: ID3D11ShaderReflection::GetDesc failed 0x%08x\n", (uint32_t)hr);
 			return false;
 		}
 
@@ -479,7 +479,7 @@ namespace bgfx { namespace hlsl
 								un.type = uniformType;
 								un.num = uint8_t(constDesc.Elements);
 								un.regIndex = uint16_t(varDesc.StartOffset);
-								un.regCount = BX_ALIGN_16(varDesc.Size) / 16;
+								un.regCount = bx::alignUp(varDesc.Size, 16) / 16;
 								_uniforms.push_back(un);
 
 								BX_TRACE("\t%s, %d, size %d, flags 0x%08x, %d (used)"
@@ -513,7 +513,7 @@ namespace bgfx { namespace hlsl
 			hr = reflect->GetResourceBindingDesc(ii, &bindDesc);
 			if (SUCCEEDED(hr) )
 			{
-				if (D3D_SIT_SAMPLER == bindDesc.Type)
+				if (D3D_SIT_SAMPLER == bindDesc.Type || D3D_SIT_TEXTURE == bindDesc.Type)
 				{
 					BX_TRACE("\t%s, %d, %d, %d"
 						, bindDesc.Name
@@ -522,17 +522,24 @@ namespace bgfx { namespace hlsl
 						, bindDesc.BindCount
 						);
 
-					const char * end = bx::strFind(bindDesc.Name, "Sampler");
-					if (NULL != end)
+					bx::StringView end = bx::strFind(bindDesc.Name, "Sampler");
+					if (end.isEmpty())
+						end = bx::strFind(bindDesc.Name, "Texture");
+
+					if (!end.isEmpty())
 					{
 						Uniform un;
-						un.name.assign(bindDesc.Name, (end - bindDesc.Name) );
-						un.type = UniformType::Enum(BGFX_UNIFORM_SAMPLERBIT | UniformType::Int1);
+						un.name.assign(bindDesc.Name, (end.getPtr() - bindDesc.Name) );
+						un.type = UniformType::Enum(kUniformSamplerBit | UniformType::Sampler);
 						un.num = 1;
 						un.regIndex = uint16_t(bindDesc.BindPoint);
 						un.regCount = uint16_t(bindDesc.BindCount);
 						_uniforms.push_back(un);
 					}
+				}
+				else
+				{
+					BX_TRACE("\t%s, unknown bind data", bindDesc.Name);
 				}
 			}
 		}
@@ -545,39 +552,39 @@ namespace bgfx { namespace hlsl
 		return true;
 	}
 
-	static bool compile(const bx::CommandLine& _cmdLine, uint32_t _version, const std::string& _code, bx::WriterI* _writer, bool _firstPass)
+	static bool compile(const Options& _options, uint32_t _version, const std::string& _code, bx::WriterI* _writer, bool _firstPass)
 	{
-		const char* profile = _cmdLine.findOption('p', "profile");
-		if (NULL == profile)
+		const char* profile = _options.profile.c_str();
+
+		if (profile[0] == '\0')
 		{
-			fprintf(stderr, "Error: Shader profile must be specified.\n");
+			bx::printf("Error: Shader profile must be specified.\n");
 			return false;
 		}
 
 		s_compiler = load();
 
 		bool result = false;
-		bool debug = _cmdLine.hasArg('\0', "debug");
+		bool debug = _options.debugInformation;
 
 		uint32_t flags = D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY;
 		flags |= debug ? D3DCOMPILE_DEBUG : 0;
-		flags |= _cmdLine.hasArg('\0', "avoid-flow-control") ? D3DCOMPILE_AVOID_FLOW_CONTROL : 0;
-		flags |= _cmdLine.hasArg('\0', "no-preshader") ? D3DCOMPILE_NO_PRESHADER : 0;
-		flags |= _cmdLine.hasArg('\0', "partial-precision") ? D3DCOMPILE_PARTIAL_PRECISION : 0;
-		flags |= _cmdLine.hasArg('\0', "prefer-flow-control") ? D3DCOMPILE_PREFER_FLOW_CONTROL : 0;
-		flags |= _cmdLine.hasArg('\0', "backwards-compatibility") ? D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY : 0;
+		flags |= _options.avoidFlowControl ? D3DCOMPILE_AVOID_FLOW_CONTROL : 0;
+		flags |= _options.noPreshader ? D3DCOMPILE_NO_PRESHADER : 0;
+		flags |= _options.partialPrecision ? D3DCOMPILE_PARTIAL_PRECISION : 0;
+		flags |= _options.preferFlowControl ? D3DCOMPILE_PREFER_FLOW_CONTROL : 0;
+		flags |= _options.backwardsCompatibility ? D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY : 0;
 
-		bool werror = _cmdLine.hasArg('\0', "Werror");
+		bool werror = _options.warningsAreErrors;
 
 		if (werror)
 		{
 			flags |= D3DCOMPILE_WARNINGS_ARE_ERRORS;
 		}
 
-		uint32_t optimization = 3;
-		if (_cmdLine.hasArg(optimization, 'O') )
+		if (_options.optimize )
 		{
-			optimization = bx::uint32_min(optimization, BX_COUNTOF(s_optimizationLevelD3D11) - 1);
+			uint32_t optimization = bx::uint32_min(_options.optimizationLevel, BX_COUNTOF(s_optimizationLevelD3D11) - 1);
 			flags |= s_optimizationLevelD3D11[optimization];
 		}
 		else
@@ -598,8 +605,7 @@ namespace bgfx { namespace hlsl
 
 		if (debug)
 		{
-			hlslfp = _cmdLine.findOption('o');
-			hlslfp += ".hlsl";
+			hlslfp = _options.outputFilePath + ".hlsl";
 			writeFile(hlslfp.c_str(), _code.c_str(), (int32_t)_code.size() );
 		}
 
@@ -625,8 +631,17 @@ namespace bgfx { namespace hlsl
 			int32_t start  = 0;
 			int32_t end    = INT32_MAX;
 
+			if (!hlslfp.empty())
+			{
+				bx::StringView logfp = bx::strFind(log, hlslfp.c_str() );
+				if (!logfp.isEmpty() )
+				{
+					log = logfp.getPtr() + hlslfp.length();
+				}
+			}
+
 			bool found = false
-				|| 2 == sscanf(log, "(%u,%u):",  &line, &column)
+				|| 2 == sscanf(log, "(%u,%u",  &line, &column)
 				|| 2 == sscanf(log, " :%u:%u: ", &line, &column)
 				;
 
@@ -638,7 +653,7 @@ namespace bgfx { namespace hlsl
 			}
 
 			printCode(_code.c_str(), line, start, end, column);
-			fprintf(stderr, "Error: D3DCompile failed 0x%08x %s\n", (uint32_t)hr, log);
+			bx::printf("Error: D3DCompile failed 0x%08x %s\n", (uint32_t)hr, log);
 			errorMsg->Release();
 			return false;
 		}
@@ -648,11 +663,11 @@ namespace bgfx { namespace hlsl
 		uint16_t attrs[bgfx::Attrib::Count];
 		uint16_t size = 0;
 
-		if (_version == 9)
+		if (_version < 400)
 		{
 			if (!getReflectionDataD3D9(code, uniforms) )
 			{
-				fprintf(stderr, "Error: Unable to get D3D9 reflection data.\n");
+				bx::printf("Error: Unable to get D3D9 reflection data.\n");
 				goto error;
 			}
 		}
@@ -661,54 +676,56 @@ namespace bgfx { namespace hlsl
 			UniformNameList unusedUniforms;
 			if (!getReflectionDataD3D11(code, profile[0] == 'v', uniforms, numAttrs, attrs, size, unusedUniforms) )
 			{
-				fprintf(stderr, "Error: Unable to get D3D11 reflection data.\n");
+				bx::printf("Error: Unable to get D3D11 reflection data.\n");
 				goto error;
 			}
 
 			if (_firstPass
 			&&  unusedUniforms.size() > 0)
 			{
-				const size_t strLength = bx::strLen("uniform");
-
 				// first time through, we just find unused uniforms and get rid of them
 				std::string output;
-				bx::Error err;
-				LineReader reader(_code.c_str() );
-				while (err.isOk() )
+				bx::LineReader reader(_code.c_str() );
+				while (!reader.isDone() )
 				{
-					char str[4096];
-					int32_t len = bx::read(&reader, str, BX_COUNTOF(str), &err);
-					if (err.isOk() )
+					bx::StringView strLine = reader.next();
+					bool found = false;
+
+					for (UniformNameList::iterator it = unusedUniforms.begin(), itEnd = unusedUniforms.end(); it != itEnd; ++it)
 					{
-						std::string strLine(str, len);
-
-						for (UniformNameList::iterator it = unusedUniforms.begin(), itEnd = unusedUniforms.end(); it != itEnd; ++it)
+						bx::StringView str = strFind(strLine, "uniform ");
+						if (str.isEmpty() )
 						{
-							size_t index = strLine.find("uniform ");
-							if (index == std::string::npos)
-							{
-								continue;
-							}
-
-							// matching lines like:  uniform u_name;
-							// we want to replace "uniform" with "static" so that it's no longer
-							// included in the uniform blob that the application must upload
-							// we can't just remove them, because unused functions might still reference
-							// them and cause a compile error when they're gone
-							if (!!bx::findIdentifierMatch(strLine.c_str(), it->c_str() ) )
-							{
-								strLine = strLine.replace(index, strLength, "static");
-								unusedUniforms.erase(it);
-								break;
-							}
+							continue;
 						}
 
-						output += strLine;
+						// matching lines like:  uniform u_name;
+						// we want to replace "uniform" with "static" so that it's no longer
+						// included in the uniform blob that the application must upload
+						// we can't just remove them, because unused functions might still reference
+						// them and cause a compile error when they're gone
+						if (!bx::findIdentifierMatch(strLine, it->c_str() ).isEmpty() )
+						{
+							output.append(strLine.getPtr(), str.getPtr() );
+							output += "static ";
+							output.append(str.getTerm(), strLine.getTerm() );
+							output += "\n";
+							found = true;
+
+							unusedUniforms.erase(it);
+							break;
+						}
+					}
+
+					if (!found)
+					{
+						output.append(strLine.getPtr(), strLine.getTerm() );
+						output += "\n";
 					}
 				}
 
 				// recompile with the unused uniforms converted to statics
-				return compile(_cmdLine, _version, output.c_str(), _writer, false);
+				return compile(_options, _version, output.c_str(), _writer, false);
 			}
 		}
 
@@ -716,7 +733,7 @@ namespace bgfx { namespace hlsl
 			uint16_t count = (uint16_t)uniforms.size();
 			bx::write(_writer, count);
 
-			uint32_t fragmentBit = profile[0] == 'p' ? BGFX_UNIFORM_FRAGMENTBIT : 0;
+			uint32_t fragmentBit = profile[0] == 'p' ? kUniformFragmentBit : 0;
 			for (UniformArray::const_iterator it = uniforms.begin(); it != uniforms.end(); ++it)
 			{
 				const Uniform& un = *it;
@@ -728,6 +745,9 @@ namespace bgfx { namespace hlsl
 				bx::write(_writer, un.num);
 				bx::write(_writer, un.regIndex);
 				bx::write(_writer, un.regCount);
+				bx::write(_writer, un.texComponent);
+				bx::write(_writer, un.texDimension);
+				bx::write(_writer, un.texFormat);
 
 				BX_TRACE("%s, %s, %d, %d, %d"
 					, un.name.c_str()
@@ -763,7 +783,7 @@ namespace bgfx { namespace hlsl
 			bx::write(_writer, nul);
 		}
 
-		if (_version > 9)
+		if (_version >= 400)
 		{
 			bx::write(_writer, numAttrs);
 			bx::write(_writer, attrs, numAttrs*sizeof(uint16_t) );
@@ -771,7 +791,7 @@ namespace bgfx { namespace hlsl
 			bx::write(_writer, size);
 		}
 
-		if (_cmdLine.hasArg('\0', "disasm") )
+		if (_options.disasm )
 		{
 			ID3DBlob* disasm;
 			D3DDisassemble(code->GetBufferPointer()
@@ -783,8 +803,7 @@ namespace bgfx { namespace hlsl
 
 			if (NULL != disasm)
 			{
-				std::string disasmfp = _cmdLine.findOption('o');
-				disasmfp += ".disasm";
+				std::string disasmfp = _options.outputFilePath + ".disasm";
 
 				writeFile(disasmfp.c_str(), disasm->GetBufferPointer(), (uint32_t)disasm->GetBufferSize() );
 				disasm->Release();
@@ -806,9 +825,9 @@ namespace bgfx { namespace hlsl
 
 } // namespace hlsl
 
-	bool compileHLSLShader(const bx::CommandLine& _cmdLine, uint32_t _version, const std::string& _code, bx::WriterI* _writer)
+	bool compileHLSLShader(const Options& _options, uint32_t _version, const std::string& _code, bx::WriterI* _writer)
 	{
-		return hlsl::compile(_cmdLine, _version, _code, _writer, true);
+		return hlsl::compile(_options, _version, _code, _writer, true);
 	}
 
 } // namespace bgfx
@@ -817,10 +836,10 @@ namespace bgfx { namespace hlsl
 
 namespace bgfx
 {
-	bool compileHLSLShader(const bx::CommandLine& _cmdLine, uint32_t _version, const std::string& _code, bx::WriterI* _writer)
+	bool compileHLSLShader(const Options& _options, uint32_t _version, const std::string& _code, bx::WriterI* _writer)
 	{
-		BX_UNUSED(_cmdLine, _version, _code, _writer);
-		fprintf(stderr, "HLSL compiler is not supported on this platform.\n");
+		BX_UNUSED(_options, _version, _code, _writer);
+		bx::printf("HLSL compiler is not supported on this platform.\n");
 		return false;
 	}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2017 Branimir Karadzic. All rights reserved.
+ * Copyright 2011-2021 Branimir Karadzic. All rights reserved.
  * License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE
  */
 
@@ -46,21 +46,10 @@ namespace bgfx
 	/// @warning This call should be only used on platforms that don't
 	///   allow creating separate rendering thread. If it is called before
 	///   to bgfx::init, render thread won't be created by bgfx::init call.
+	///
+	/// @attention C99 equivalent is `bgfx_render_frame`.
+	///
 	RenderFrame::Enum renderFrame(int32_t _msecs = -1);
-
-	/// Platform data.
-	///
-	/// @attention C99 equivalent is `bgfx_platform_data_t`.
-	///
-	struct PlatformData
-	{
-		void* ndt;          //!< Native display type.
-		void* nwh;          //!< Native window handle.
-		void* context;      //!< GL context, or D3D device.
-		void* backBuffer;   //!< GL backbuffer, or D3D render target view.
-		void* backBufferDS; //!< Backbuffer depth/stencil.
-		void* session;      //!< ovrSession, for Oculus SDK
-	};
 
 	/// Set platform data.
 	///
@@ -122,9 +111,9 @@ namespace bgfx
 	/// @param[in] _format Texture format. See: `TextureFormat::Enum`.
 	/// @param[in] _flags Default texture sampling mode is linear, and wrap mode
 	///   is repeat.
-	///   - `BGFX_TEXTURE_[U/V/W]_[MIRROR/CLAMP]` - Mirror or clamp to edge wrap
+	///   - `BGFX_SAMPLER_[U/V/W]_[MIRROR/CLAMP]` - Mirror or clamp to edge wrap
 	///     mode.
-	///   - `BGFX_TEXTURE_[MIN/MAG/MIP]_[POINT/ANISOTROPIC]` - Point or anisotropic
+	///   - `BGFX_SAMPLER_[MIN/MAG/MIP]_[POINT/ANISOTROPIC]` - Point or anisotropic
 	///     sampling.
 	///
 	/// @returns Native API pointer to texture. If result is 0, texture is not created yet from the
@@ -134,7 +123,14 @@ namespace bgfx
 	///
 	/// @attention C99 equivalent is `bgfx_override_internal_texture`.
 	///
-	uintptr_t overrideInternal(TextureHandle _handle, uint16_t _width, uint16_t _height, uint8_t _numMips, TextureFormat::Enum _format, uint32_t _flags = BGFX_TEXTURE_NONE);
+	uintptr_t overrideInternal(
+		  TextureHandle _handle
+		, uint16_t _width
+		, uint16_t _height
+		, uint8_t _numMips
+		, TextureFormat::Enum _format
+		, uint64_t _flags = BGFX_TEXTURE_NONE|BGFX_SAMPLER_NONE
+		);
 
 } // namespace bgfx
 

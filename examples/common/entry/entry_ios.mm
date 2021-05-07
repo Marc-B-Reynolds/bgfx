@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2017 Branimir Karadzic. All rights reserved.
+ * Copyright 2011-2021 Branimir Karadzic. All rights reserved.
  * License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
  */
 
@@ -14,7 +14,7 @@
 #if __IPHONE_8_0 && !TARGET_IPHONE_SIMULATOR  // check if sdk/target supports metal
 #   import <Metal/Metal.h>
 #   import <QuartzCore/CAMetalLayer.h>
-//#   define HAS_METAL_SDK
+#   define HAS_METAL_SDK
 #endif
 
 #include <bgfx/platform.h>
@@ -29,7 +29,7 @@ namespace entry
 		int m_argc;
 		const char* const* m_argv;
 
-		static int32_t threadFunc(void* _userData);
+		static int32_t threadFunc(bx::Thread* _thread, void* _userData);
 	};
 
 	static WindowHandle s_defaultWindow = { 0 };
@@ -38,8 +38,8 @@ namespace entry
 	{
 		Context(uint32_t _width, uint32_t _height)
 		{
-			const char* const argv[1] = { "ios" };
-			m_mte.m_argc = 1;
+			static const char* const argv[] = { "ios" };
+			m_mte.m_argc = BX_COUNTOF(argv);
 			m_mte.m_argv = argv;
 
 			m_eventQueue.postSizeEvent(s_defaultWindow, _width, _height);
@@ -63,19 +63,22 @@ namespace entry
 
 	static Context* s_ctx;
 
-	int32_t MainThreadEntry::threadFunc(void* _userData)
+	int32_t MainThreadEntry::threadFunc(bx::Thread* _thread, void* _userData)
 	{
+		BX_UNUSED(_thread);
+
 		CFBundleRef mainBundle = CFBundleGetMainBundle();
-		if ( mainBundle != nil )
+		if (mainBundle != nil)
 		{
 			CFURLRef resourcesURL = CFBundleCopyResourcesDirectoryURL(mainBundle);
-			if ( resourcesURL != nil )
+			if (resourcesURL != nil)
 			{
 				char path[PATH_MAX];
-				if (CFURLGetFileSystemRepresentation(resourcesURL, TRUE, (UInt8 *)path, PATH_MAX) )
+				if (CFURLGetFileSystemRepresentation(resourcesURL, TRUE, (UInt8*)path, PATH_MAX) )
 				{
 					chdir(path);
 				}
+
 				CFRelease(resourcesURL);
 			}
 		}
@@ -127,9 +130,9 @@ namespace entry
 		BX_UNUSED(_handle, _title);
 	}
 
-	void toggleWindowFrame(WindowHandle _handle)
+	void setWindowFlags(WindowHandle _handle, uint32_t _flags, bool _enabled)
 	{
-		BX_UNUSED(_handle);
+		BX_UNUSED(_handle, _flags, _enabled);
 	}
 
 	void toggleFullscreen(WindowHandle _handle)

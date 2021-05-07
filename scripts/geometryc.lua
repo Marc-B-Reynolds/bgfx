@@ -1,10 +1,10 @@
 --
--- Copyright 2010-2017 Branimir Karadzic. All rights reserved.
+-- Copyright 2010-2021 Branimir Karadzic. All rights reserved.
 -- License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
 --
 
 project "geometryc"
-	uuid "8794dc3a-2d57-11e2-ba18-368d09e48fda"
+	uuid (os.uuid("geometryc"))
 	kind "ConsoleApp"
 
 	includedirs {
@@ -15,11 +15,9 @@ project "geometryc"
 	}
 
 	files {
-		path.join(BGFX_DIR, "3rdparty/forsyth-too/**.cpp"),
-		path.join(BGFX_DIR, "3rdparty/forsyth-too/**.h"),
-		path.join(BGFX_DIR, "3rdparty/ib-compress/**.cpp"),
-		path.join(BGFX_DIR, "3rdparty/ib-compress/**.h"),
-		path.join(BGFX_DIR, "src/vertexdecl.**"),
+		path.join(BGFX_DIR, "3rdparty/meshoptimizer/src/**.cpp"),
+		path.join(BGFX_DIR, "3rdparty/meshoptimizer/src/**.h"),
+		path.join(BGFX_DIR, "src/vertexlayout.**"),
 		path.join(BGFX_DIR, "tools/geometryc/**.cpp"),
 		path.join(BGFX_DIR, "tools/geometryc/**.h"),
 		path.join(BGFX_DIR, "examples/common/bounds.**"),
@@ -31,10 +29,18 @@ project "geometryc"
 
 	configuration { "mingw-*" }
 		targetextension ".exe"
+		links {
+			"psapi",
+		}
 
-	configuration { "osx" }
+	configuration { "osx*" }
 		links {
 			"Cocoa.framework",
+		}
+
+	configuration { "vs20*" }
+		links {
+			"psapi",
 		}
 
 	configuration {}
